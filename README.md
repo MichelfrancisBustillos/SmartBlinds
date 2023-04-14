@@ -7,6 +7,7 @@ Dependencies:
 - [tzapu/WifiManger@^2.0.15](https://github.com/tzapu/WiFiManager)  
 - [bblanchon/ArduinoJson@^6.21.1  ](https://github.com/bblanchon/ArduinoJson)
 - [khoih-prog/ESP_DoubleResetDetector@^1.3.2](https://github.com/khoih-prog/ESP_DoubleResetDetector)  
+- [bblanchon/ArduinoJson@^6.21.2](https://github.com/bblanchon/ArduinoJson)
 
 Stats:  
 - Servo Pin: ESP32 GPIO Pin 13  
@@ -15,6 +16,7 @@ Stats:
 
 Notes:  
 - After every movement, plus a delay (servoDelay in milliseconds), the servo is detached to save power and avoid vibration.
+- MQTT Password maximum length is 32 characters.
 
 Roadmap:  
 - Software:  
@@ -23,15 +25,25 @@ Roadmap:
     - Serial IO: Allow for serial input of dimmer value as well as various debugging and status output.  
     - Wifi Connectiviy: Allow for wifi configuration via temporary SSID.  
     - Reset Button: External button to reset all wifi configuration. (May be removed after developement).  
-  - Config Button: Double press ESP32 on-board reset button to enter enable configuration via temporary SSID.
+    - Config Button: Double press ESP32 on-board reset button to enter enable configuration via temporary SSID.
+    - Persistent Configuration Memory: Enable settings & configuration to persist through power loss. (Done via SPIFFS).  
   - To-Do:  
     - MQTT Implementation: Enable IO via MQTT (enables Home Assistant integration).
-    - Persistent Configuration Memory: Enable settings & configuration to persist through power loss. (Done via SPIFFS).  
 - Hardware:
   - Complete:
-      - Initial schematic design including solar charging with battery reporting.
-    - To-Do:
-      - Test force and travel distance for actuation. Choose appropriate servo
-      - Integrate Config/reset button into schematic.  
-      - Design enclosure.
-      - Design armature & affixation method.
+    - Initial schematic design including solar charging with battery reporting.
+  - To-Do:
+    - Test force and travel distance for actuation. Choose appropriate servo
+    - Integrate Config/reset button into schematic.  
+    - Design enclosure.
+    - Design armature & affixation method.
+- Documentation Et. Al.:
+  - Complete:
+    - Readme
+  - To-Do:
+    - Add Hardware and assembly section to docs
+    - Complete & upload schematic
+    - CI/CD
+    - Polish Readme (Badges, etc.)
+
+    

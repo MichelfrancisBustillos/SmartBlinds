@@ -1,6 +1,9 @@
 #include <Arduino.h>
 #include <ESP32Servo.h>
 #include <WiFiManager.h>
+#include <FS.h>
+#include <SPIFFS.h>
+#include <ArduinoJson.h>
 
 #define ESP_DRD_USE_SPIFFS true  //define storage type for DoubleResetDetector. Must be done before header inclusion
 
@@ -11,23 +14,34 @@
 #define LED_BUILTIN 2 //Pin for onboard LED
 #define CONFIGBUTTON 34 //GPIO pin for config button
 #define DRD_ADDRESS 0 //RTC Memory Address for the DoubleResetDetector to use
+#define JSON_CONFIG "/config.json" //Location for config file
 
 //define globel variables
 int servoDelay = 700; //Delay between servo movements
 int configTimeout = 300; //Timeout for wifi portal mode
 int drdTimeout = 10; //Timeout for DoubleResetDetector
+bool saveConfig = false; //Tag if configuration should be saved
 Servo servo1; //Create servo object
 WiFiManager wifi; //Create wifimanager object
 DoubleResetDetector* drd; //Create DoubleResetDetector object
 
 //WiFiManager Custom Parameters
-WiFiManagerParameter deviceName("device_name", "Device Name:", "Smart Blinds", 15); //hostname
+char deviceName_String[15] = "SmartBlinds";
+WiFiManagerParameter deviceName("device_name", "Device Name:", deviceName_String, 15); //hostname
+char mqttServer_String[15] = "0.0.0.0";
+WiFiManagerParameter mqttServer("mqttServer", "MQTT Server IP:", mqttServer_String, 15); //MQTT Server IP
+char mqttUsername_String[23] = "";
+WiFiManagerParameter mqttUsername("mqttUsername", "MQTT Username:", mqttUsername_String, 23); //MQTT Username
+char mqttPassword_String[32] = "";
+WiFiManagerParameter mqttPassword("mqttPassword", "MQTT Password:", mqttPassword_String, 32); //MQTT Password
 
 //define methods
 int rangeConversion(int);
 void serialDimmerIO();
 void checkConfigButton();
 void saveParamsCallback();
+void saveConfigFile();
+bool loadConfigFile();
 
 void setup() {
   Serial.begin(115200); //open serial coms
@@ -43,6 +57,13 @@ void setup() {
 
   //Initialize Wifi
   bool forceConfig = false;
+
+  bool spiffsSetup = loadConfigFile();
+  if (!spiffsSetup){
+    Serial.println("Forcing config mode as there is no saved config!");
+    forceConfig = true;
+  }
+
   drd = new DoubleResetDetector(drdTimeout, DRD_ADDRESS);
   if (drd -> detectDoubleReset()){
     Serial.println("Double reset detected...");
@@ -50,6 +71,9 @@ void setup() {
   }
   WiFi.mode(WIFI_STA); //Set ESP32 to 'station mode (wifi client) for desired end state
   wifi.addParameter(&deviceName);
+  wifi.addParameter(&mqttServer);
+  wifi.addParameter(&mqttUsername);
+  wifi.addParameter(&mqttPassword);
   //wifi.setConfigPortalBlocking(false);
   wifi.setConfigPortalTimeout(configTimeout);
   wifi.setSaveParamsCallback(saveParamsCallback);
@@ -133,8 +157,85 @@ void checkConfigButton(){
 
 void saveParamsCallback(){
     Serial.println("Get Params: ");
+
+    //Pull, print and save deivceName
     Serial.print(deviceName.getID());
     Serial.print(": ");
     Serial.println(deviceName.getValue());
     WiFi.setHostname(deviceName.getValue());
+    strncpy(deviceName_String, deviceName.getValue(), sizeof(deviceName_String));
+
+    //Pull, print and save mqttServer
+    Serial.print(mqttServer.getID());
+    Serial.print(": ");
+    Serial.println(mqttServer.getValue());
+    strncpy(mqttServer_String, mqttServer.getValue(), sizeof(mqttServer_String));
+
+    //Pull, print and save mqttUsername
+    Serial.print(mqttUsername.getID());
+    Serial.print(": ");
+    Serial.println(mqttUsername.getValue());
+    strncpy(mqttUsername_String, mqttUsername.getValue(), sizeof(mqttUsername_String));
+
+    //Pull, print and save mqttPassword
+    Serial.print(mqttPassword.getID());
+    Serial.print(": ");
+    Serial.println(mqttPassword.getValue());
+    strncpy(mqttPassword_String, mqttPassword.getValue(), sizeof(mqttPassword_String));
+
+    saveConfigFile();
+}
+
+void saveConfigFile(){
+  Serial.println("Saving configuration...");
+  StaticJsonDocument<512> json;
+  json["deviceName"] = deviceName_String;
+  json["mqttServer"] = mqttServer_String;
+  json["mqttUsername"] = mqttUsername_String;
+  json["mqttPassword"] = mqttPassword_String;
+
+  File configFile = SPIFFS.open(JSON_CONFIG, "w"); //Open config file
+  if (!configFile){ //Check if file opened
+    Serial.println("Failed to open config file for writing!"); //Error: Config file did not open
+  }
+
+  serializeJsonPretty(json, Serial); //Serialize JSON data
+  if (serializeJson(json, configFile) == 0){ //Check if file serialized
+    Serial.println("Failed to write to file!"); //Error: File unable to serialize for writing
+  }
+
+  configFile.close();
+}
+
+bool loadConfigFile(){
+  Serial.println("Mounting file system...");
+
+  if (SPIFFS.begin(false) || SPIFFS.begin(true)){ //Check if FS mounted
+    Serial.println("Mounted file system."); //FS mounted successfully
+    if (SPIFFS.exists(JSON_CONFIG)){ //Check if config file exists
+      Serial.println("Reading config file...");
+      File configFile = SPIFFS.open(JSON_CONFIG, "r"); //Open config file for reading
+      if (configFile){
+        Serial.println("Opened config file.");
+        StaticJsonDocument<512> json;
+        DeserializationError error = deserializeJson(json, configFile);
+        serializeJsonPretty(json, Serial);
+        if (!error){ //If no error...
+          Serial.println("Parsing JSON...");
+          strcpy(deviceName_String, json["deviceName"]);
+          strcpy(mqttServer_String, json["mqttServer"]);
+          strcpy(mqttUsername_String, json["mqttUsername"]);
+          strcpy(mqttPassword_String, json["mqttPassword"]);
+
+          return true;
+        } else {
+          Serial.println("Failed to load JSON config!"); //Error: Unable to load JSON config
+        }
+      }
+    }
+  } else {
+    Serial.println("Failed to mount file system!");
+  }
+
+  return false;
 }
