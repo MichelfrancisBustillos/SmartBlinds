@@ -8,6 +8,7 @@ Dependencies:
 - [bblanchon/ArduinoJson@^6.21.1  ](https://github.com/bblanchon/ArduinoJson)
 - [khoih-prog/ESP_DoubleResetDetector@^1.3.2](https://github.com/khoih-prog/ESP_DoubleResetDetector)  
 - [bblanchon/ArduinoJson@^6.21.2](https://github.com/bblanchon/ArduinoJson)
+- [knolleary/PubSubClient@^2.8](https://github.com/knolleary/pubsubclient)
 
 Stats:  
 - Servo Pin: ESP32 GPIO Pin 13  
@@ -29,6 +30,7 @@ Roadmap:
     - Persistent Configuration Memory: Enable settings & configuration to persist through power loss. (Done via SPIFFS).  
   - To-Do:  
     - MQTT Implementation: Enable IO via MQTT (enables Home Assistant integration).
+    - SerialIO input sanitization
 - Hardware:
   - Complete:
     - Initial schematic design including solar charging with battery reporting.

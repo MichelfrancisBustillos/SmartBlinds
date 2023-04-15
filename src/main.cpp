@@ -4,6 +4,7 @@
 #include <FS.h>
 #include <SPIFFS.h>
 #include <ArduinoJson.h>
+#include <PubSubClient.h>
 
 #define ESP_DRD_USE_SPIFFS true  //define storage type for DoubleResetDetector. Must be done before header inclusion
 
@@ -24,6 +25,8 @@ bool saveConfig = false; //Tag if configuration should be saved
 Servo servo1; //Create servo object
 WiFiManager wifi; //Create wifimanager object
 DoubleResetDetector* drd; //Create DoubleResetDetector object
+WiFiClient espClient;
+PubSubClient client(espClient);
 
 //WiFiManager Custom Parameters
 char deviceName_String[15] = "SmartBlinds";
@@ -42,6 +45,8 @@ void checkConfigButton();
 void saveParamsCallback();
 void saveConfigFile();
 bool loadConfigFile();
+void callback(char*, byte*, unsigned int);
+void reconnect();
 
 void setup() {
   Serial.begin(115200); //open serial coms
@@ -97,7 +102,13 @@ void setup() {
       Serial.println("Connected to wifi.");
     }
   }
-    Serial.println("Setup complete...");
+
+  //Initialize MQTT
+  Serial.println(mqttServer_String);
+  client.setServer(mqttServer_String, 1883);
+  client.setCallback(callback);
+
+  Serial.println("Setup complete...");
 }
 
 void loop() {
@@ -105,6 +116,10 @@ void loop() {
   digitalWrite(LED_BUILTIN, WiFi.status() == WL_CONNECTED); //Turn on onboard LED as wifi status indicator
   checkConfigButton();
   serialDimmerIO();
+  if (!client.connected()) {
+    reconnect();
+  }
+  client.loop();
   drd->loop();
 }
 
@@ -133,16 +148,21 @@ void serialDimmerIO(){
   if(Serial.available()){
     userInput = Serial.readStringUntil('\n');
     int dimmer = userInput.toInt();
-    int servoPosition = rangeConversion(dimmer); //Convert dimmer percentage input into servo steps
-    //int servoPosition = dimmer; //Bypass rangeConversion for debugging
-    Serial.print("Dimmer: ");
-    Serial.print(dimmer);
-    Serial.print(" Servo: ");
-    Serial.println(servoPosition);
-    servo1.attach(SERVOPIN);
-    servo1.write(servoPosition);
-    delay(servoDelay);
-    servo1.detach();
+
+    if (dimmer >= 0 && dimmer <= 100){
+      int servoPosition = rangeConversion(dimmer); //Convert dimmer percentage input into servo steps
+      //int servoPosition = dimmer; //Bypass rangeConversion for debugging
+      Serial.print("Dimmer: ");
+      Serial.print(dimmer);
+      Serial.print(" Servo: ");
+      Serial.println(servoPosition);
+      servo1.attach(SERVOPIN);
+      servo1.write(servoPosition);
+      delay(servoDelay);
+      servo1.detach();
+    } else {
+      Serial.println("Invalid dimmer value!");
+    }
   }
   return;
 }
@@ -238,4 +258,35 @@ bool loadConfigFile(){
   }
 
   return false;
+}
+
+void callback(char* topic, byte* payload, unsigned int length) {
+  Serial.print("Message arrived [");
+  Serial.print(topic);
+  Serial.print("] ");
+  for (int i=0;i<length;i++) {
+    Serial.print((char)payload[i]);
+  }
+  Serial.println();
+}
+
+void reconnect() {
+  // Loop until we're reconnected
+  while (!client.connected()) {
+    Serial.print("Attempting MQTT connection...");
+    // Attempt to connect
+    if (client.connect(deviceName_String, mqttUsername_String, mqttPassword_String)) {
+      Serial.println("connected");
+      // Once connected, publish an announcement...
+      client.publish("outTopic","hello world");
+      // ... and resubscribe
+      client.subscribe("inTopic");
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 5 seconds");
+      // Wait 5 seconds before retrying
+      delay(5000);
+    }
+  }
 }
