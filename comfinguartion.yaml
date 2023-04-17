@@ -1,0 +1,14 @@
+mqtt:
+  light:
+    - name: <deviceName>
+      state_topic: "/home/<deviceName>/state"
+      command_topic: "/home/<deviceName>/switch"
+      brightness_state_topic: '/home/<deviceName>/brightness'
+      brightness_command_topic: '/home/<deviceName>/move'
+      qos: 0
+      payload_on: "ON"
+      payload_off: "OFF"
+      optimistic: true
+      icon: mdi:blinds-horizontal-closed
+      on_command_type: brightness
+      unique_id: <uniqueUUID>

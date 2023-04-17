@@ -22,6 +22,8 @@ int servoDelay = 700; //Delay between servo movements
 int configTimeout = 300; //Timeout for wifi portal mode
 int drdTimeout = 10; //Timeout for DoubleResetDetector
 bool saveConfig = false; //Tag if configuration should be saved
+const char* mqttTopic_TX; //Topic for recieving MQTT messages
+String mqttTopic_String; //String for creating MQTT topics
 Servo servo1; //Create servo object
 WiFiManager wifi; //Create wifimanager object
 DoubleResetDetector* drd; //Create DoubleResetDetector object
@@ -40,13 +42,15 @@ WiFiManagerParameter mqttPassword("mqttPassword", "MQTT Password:", mqttPassword
 
 //define methods
 int rangeConversion(int);
-void serialDimmerIO();
+void serialIO();
 void checkConfigButton();
 void saveParamsCallback();
 void saveConfigFile();
 bool loadConfigFile();
 void callback(char*, byte*, unsigned int);
 void reconnect();
+void dimmerIO(String);
+void mqttDiscovery();
 
 void setup() {
   Serial.begin(115200); //open serial coms
@@ -107,6 +111,7 @@ void setup() {
   Serial.println(mqttServer_String);
   client.setServer(mqttServer_String, 1883);
   client.setCallback(callback);
+  mqttTopic_String = "/home/" + String(deviceName_String);
 
   Serial.println("Setup complete...");
 }
@@ -115,10 +120,11 @@ void loop() {
   wifi.process();
   digitalWrite(LED_BUILTIN, WiFi.status() == WL_CONNECTED); //Turn on onboard LED as wifi status indicator
   checkConfigButton();
-  serialDimmerIO();
+  serialIO();
   if (!client.connected()) {
     reconnect();
   }
+
   client.loop();
   drd->loop();
 }
@@ -128,7 +134,7 @@ int rangeConversion(int dimmer){
   int servoMin = 0; //minimum value for servo movement
   int servoMax = 160; //max value for servo movement
   int dimmerMin = 0;
-  int dimmerMax = 100;
+  int dimmerMax = 255;
   int servoRange = (servoMax - servoMin); //servo range of motion
   int dimmerRange = (dimmerMax - dimmerMin);
 
@@ -143,26 +149,11 @@ int rangeConversion(int dimmer){
   return servoPosition;
 }
 
-void serialDimmerIO(){
+void serialIO(){
   String userInput = "";
   if(Serial.available()){
     userInput = Serial.readStringUntil('\n');
-    int dimmer = userInput.toInt();
-
-    if (dimmer >= 0 && dimmer <= 100){
-      int servoPosition = rangeConversion(dimmer); //Convert dimmer percentage input into servo steps
-      //int servoPosition = dimmer; //Bypass rangeConversion for debugging
-      Serial.print("Dimmer: ");
-      Serial.print(dimmer);
-      Serial.print(" Servo: ");
-      Serial.println(servoPosition);
-      servo1.attach(SERVOPIN);
-      servo1.write(servoPosition);
-      delay(servoDelay);
-      servo1.detach();
-    } else {
-      Serial.println("Invalid dimmer value!");
-    }
+    dimmerIO(userInput);
   }
   return;
 }
@@ -170,7 +161,7 @@ void serialDimmerIO(){
 void checkConfigButton(){
   if (digitalRead(CONFIGBUTTON) == HIGH){
     Serial.println("Config button pressed.");
-    wifi.resetSettings(); //Reset all wifi settings
+    //wifi.resetSettings(); //Reset all wifi settings
     ESP.restart();
   }
 }
@@ -261,13 +252,28 @@ bool loadConfigFile(){
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("Message arrived [");
-  Serial.print(topic);
-  Serial.print("] ");
-  for (int i=0;i<length;i++) {
-    Serial.print((char)payload[i]);
+  char p[length + 1];
+  memcpy(p, payload, length);
+  p[length] = NULL;
+  String message(p);
+  String incoming_topic(topic);
+
+  Serial.print("Message recived on topic ");
+  Serial.print(incoming_topic);
+  Serial.print(": ");
+  Serial.println(message);
+
+  if (incoming_topic == (mqttTopic_String + "/move")){
+    dimmerIO(message);
+  } else if (incoming_topic == (mqttTopic_String + "/switch")){
+    if (message == "ON"){
+      Serial.println("Opening blinds...");
+      dimmerIO("255");
+    } else if (message == "OFF"){
+      Serial.println("Closing blinds...");
+      dimmerIO("0");
+    }
   }
-  Serial.println();
 }
 
 void reconnect() {
@@ -277,10 +283,8 @@ void reconnect() {
     // Attempt to connect
     if (client.connect(deviceName_String, mqttUsername_String, mqttPassword_String)) {
       Serial.println("connected");
-      // Once connected, publish an announcement...
-      client.publish("outTopic","hello world");
-      // ... and resubscribe
-      client.subscribe("inTopic");
+      client.subscribe("#");
+      mqttDiscovery();
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
@@ -289,4 +293,59 @@ void reconnect() {
       delay(5000);
     }
   }
+}
+
+void dimmerIO(String payload){
+  for (char const &ch : payload) {
+    if (isdigit(ch) == 0) {
+      Serial.println("Invalid dimmer value!");
+      return;
+    }
+  }
+
+  int dimmer = payload.toInt();
+
+  if (dimmer >= 0 && dimmer <= 255){
+    int servoPosition = rangeConversion(dimmer); //Convert dimmer percentage input into servo steps
+    //int servoPosition = dimmer; //Bypass rangeConversion for debugging
+    Serial.print("Dimmer: ");
+    Serial.print(dimmer);
+    Serial.print(" Servo: ");
+    Serial.println(servoPosition);
+    servo1.attach(SERVOPIN);
+    servo1.write(servoPosition);
+    delay(servoDelay);
+    servo1.detach();
+  } else {
+    Serial.println(("Invalid dimmer value!" + dimmer));
+    return;
+  }
+}
+
+void mqttDiscovery(){
+  String name = String(deviceName_String);
+  String topic = "homeassistant/light/" + name + "/config";
+  String payload = "";
+
+  StaticJsonDocument<512> json;
+  json["name"] = deviceName_String;
+  json["command_topic"] = ("/home/" + name + "/move");
+  json["state_topic"] = ("/home/" + name + "/state");
+  json["brightness_state_topic"] = ("/home/" + name + "/brightness");
+  json["brightness_command_topic"] = ("/home/" + name + "/move");
+  json["qos"] = "0";
+  json["payload_on"] = "ON";
+  json["payload_off"] = "OFF";
+  json["optimistic"] = "true";
+  json["icon"] = "mdi:blinds-horizontal-closed";
+  json["on_command_type"] = "brightness";
+
+  serializeJsonPretty(json, payload);
+  Serial.println("Initiating MQTT Discovery...");
+  Serial.print("Topic: ");
+  Serial.println(topic.c_str());
+  Serial.print("Payload: ");
+  Serial.println(payload.c_str());
+
+  client.publish(topic.c_str(), payload.c_str());  //NOT PUBLISHING!!!!!!
 }

@@ -18,6 +18,7 @@ Stats:
 Notes:  
 - After every movement, plus a delay (servoDelay in milliseconds), the servo is detached to save power and avoid vibration.
 - MQTT Password maximum length is 32 characters.
+- Added 'configuration.yaml' snippet file for manual adoption into Home Assistant until MQTT auto-discovery is completed.
 
 Roadmap:  
 - Software:  
@@ -28,9 +29,12 @@ Roadmap:
     - Reset Button: External button to reset all wifi configuration. (May be removed after developement).  
     - Config Button: Double press ESP32 on-board reset button to enter enable configuration via temporary SSID.
     - Persistent Configuration Memory: Enable settings & configuration to persist through power loss. (Done via SPIFFS).  
+    - MQTT Implementation: Enable IO via MQTT (enables Home Assistant integration).  \
+    - Input sanitization
   - To-Do:  
-    - MQTT Implementation: Enable IO via MQTT (enables Home Assistant integration).
-    - SerialIO input sanitization
+    - Battery voltage/percentage feedback
+    - 2-way HomeAssistant feedback
+    - HomeAssistant/MQTT auto-discovery (In progress. MQTT call created but not publishing. Reason unknown)
 - Hardware:
   - Complete:
     - Initial schematic design including solar charging with battery reporting.
