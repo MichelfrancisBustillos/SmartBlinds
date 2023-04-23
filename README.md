@@ -31,10 +31,10 @@ Roadmap:
     - Persistent Configuration Memory: Enable settings & configuration to persist through power loss. (Done via SPIFFS).  
     - MQTT Implementation: Enable IO via MQTT (enables Home Assistant integration).  \
     - Input sanitization
+    - HomeAssistant/MQTT auto-discovery
   - To-Do:  
     - Battery voltage/percentage feedback
     - 2-way HomeAssistant feedback
-    - HomeAssistant/MQTT auto-discovery (In progress. MQTT call created but not publishing. Reason unknown)
 - Hardware:
   - Complete:
     - Initial schematic design including solar charging with battery reporting.

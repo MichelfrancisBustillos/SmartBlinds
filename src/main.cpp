@@ -51,13 +51,14 @@ void callback(char*, byte*, unsigned int);
 void reconnect();
 void dimmerIO(String);
 void mqttDiscovery();
+bool learnLimits();
 
 void setup() {
   Serial.begin(115200); //open serial coms
   pinMode(LED_BUILTIN, OUTPUT); //define onboard ESP32 LED for use as status indicator
   pinMode(CONFIGBUTTON, INPUT_PULLDOWN); //define pin for user reste button input
 
-  //Initiale Servo
+  //Initialize Servo
   servo1.attach(SERVOPIN);
   servo1.write(0); //set servo to '0' starting position
   delay(servoDelay);
@@ -111,6 +112,7 @@ void setup() {
   Serial.println(mqttServer_String);
   client.setServer(mqttServer_String, 1883);
   client.setCallback(callback);
+  client.setBufferSize(1024);
   mqttTopic_String = "/home/" + String(deviceName_String);
 
   Serial.println("Setup complete...");
@@ -120,9 +122,11 @@ void loop() {
   wifi.process();
   digitalWrite(LED_BUILTIN, WiFi.status() == WL_CONNECTED); //Turn on onboard LED as wifi status indicator
   checkConfigButton();
-  serialIO();
+  serialIO(); 
+
   if (!client.connected()) {
     reconnect();
+    mqttDiscovery();
   }
 
   client.loop();
@@ -130,13 +134,13 @@ void loop() {
 }
 
 int rangeConversion(int dimmer){
-  int servoPosition = 0;
+  int servoPosition = 0; //Position to move servo to
+  int dimmerMin = 0; //Minimum dimmer input value
+  int dimmerMax = 255; //Maximum dimmer input value
   int servoMin = 0; //minimum value for servo movement
   int servoMax = 160; //max value for servo movement
-  int dimmerMin = 0;
-  int dimmerMax = 255;
   int servoRange = (servoMax - servoMin); //servo range of motion
-  int dimmerRange = (dimmerMax - dimmerMin);
+  int dimmerRange = (dimmerMax - dimmerMin); //dimmer range of 'motion'
 
   servoPosition = (((dimmer - dimmerMin) * servoRange) / dimmerRange) + servoMin; //convert dimmer percentage to servo position within min/max range
 
@@ -264,14 +268,14 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.println(message);
 
   if (incoming_topic == (mqttTopic_String + "/move")){
-    dimmerIO(message);
-  } else if (incoming_topic == (mqttTopic_String + "/switch")){
     if (message == "ON"){
       Serial.println("Opening blinds...");
       dimmerIO("255");
     } else if (message == "OFF"){
       Serial.println("Closing blinds...");
       dimmerIO("0");
+    } else {
+      dimmerIO(message);
     }
   }
 }
@@ -284,7 +288,6 @@ void reconnect() {
     if (client.connect(deviceName_String, mqttUsername_String, mqttPassword_String)) {
       Serial.println("connected");
       client.subscribe("#");
-      mqttDiscovery();
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
@@ -323,11 +326,11 @@ void dimmerIO(String payload){
 }
 
 void mqttDiscovery(){
-  String name = String(deviceName_String);
-  String topic = "homeassistant/light/" + name + "/config";
-  String payload = "";
+  String name = String(deviceName_String); //deviceName as string for later use
+  String discoveryTopic = "homeassistant/light/" + name + "/config"; //Topic for MQTT discovery
+  String discoveryPayload = ""; //Payload for MQTT discovery
 
-  StaticJsonDocument<512> json;
+  StaticJsonDocument<512> json; //JSON Document
   json["name"] = deviceName_String;
   json["command_topic"] = ("/home/" + name + "/move");
   json["state_topic"] = ("/home/" + name + "/state");
@@ -340,12 +343,12 @@ void mqttDiscovery(){
   json["icon"] = "mdi:blinds-horizontal-closed";
   json["on_command_type"] = "brightness";
 
-  serializeJsonPretty(json, payload);
+  serializeJsonPretty(json, discoveryPayload);
   Serial.println("Initiating MQTT Discovery...");
   Serial.print("Topic: ");
-  Serial.println(topic.c_str());
+  Serial.println(discoveryTopic);
   Serial.print("Payload: ");
-  Serial.println(payload.c_str());
+  Serial.println(discoveryPayload);
 
-  client.publish(topic.c_str(), payload.c_str());  //NOT PUBLISHING!!!!!!
+  client.publish(discoveryTopic.c_str(), discoveryPayload.c_str());
 }
