@@ -17,12 +17,12 @@
 #define DRD_ADDRESS 0 //RTC Memory Address for the DoubleResetDetector to use
 #define JSON_CONFIG "/config.json" //Location for config file
 
-//define globel variables
+//define global variables
 int servoDelay = 700; //Delay between servo movements
 int configTimeout = 300; //Timeout for wifi portal mode
 int drdTimeout = 10; //Timeout for DoubleResetDetector
 bool saveConfig = false; //Tag if configuration should be saved
-const char* mqttTopic_TX; //Topic for recieving MQTT messages
+const char* mqttTopic_TX; //Topic for receiving MQTT messages
 String mqttTopic_String; //String for creating MQTT topics
 Servo servo1; //Create servo object
 WiFiManager wifi; //Create wifimanager object
