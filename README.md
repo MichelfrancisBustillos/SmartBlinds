@@ -1,5 +1,8 @@
 # SmartBlinds
 
+![License](https://img.shields.io/github/license/MichelfrancisBustillos/SmartBlinds)
+![Languages](https://img.shields.io/github/languages/count/MichelfrancisBustillos/SmartBlinds)
+![TopLanguage](https://img.shields.io/github/languages/top/MichelfrancisBustillos/SmartBlinds)
  Smart module for pull string louver blinds.
 
 Dependencies:  
